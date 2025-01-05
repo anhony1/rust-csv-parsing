@@ -5,23 +5,64 @@ extern crate csv;
 
 use std::fs::File;
 
+use serde::Deserialize;
+
 use std::error::Error;
 use std::io;
 use std::process;
 
+#[derive(Debug)]
+enum StatementSource {
+    Discover,
+    Chase,
+}
+
+#[derive(Debug)]
+struct Transaction {
+    date: NaiveDate,
+    description: String,
+    amount: Decimal,
+    category: String,
+    source: StatementSource,
+    // Optional fields for additional Chase data
+    post_date: Option<NaiveDate>,
+    transaction_type: Option<String>,
+    memo: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DiscoverRecord {
+    #[serde(rename = "Trans. Date")]
+    trans_date: String,
+    Description: String,
+    Amount: String,
+    Category: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ChaseRecord {
+    #[serde(rename = "Transaction Date")]
+    trans_date: String,
+    #[serde(rename = "Post Date")]
+    post_date: String,
+    description: String,
+    category: String,
+    #[serde(rename = "Type")]
+    trans_type: String,
+    amount: String,
+    memo: String,
+}
+
 fn main() {
-    
     draw_graph().unwrap();
 
     if let Err(err) = run() {
         println!("{}", err);
         process::exit(1);
     }
-
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
-    
     let absolute_file_path = "";
 
     // The question mark is the error propagation operator in Rust. When placed after
@@ -30,61 +71,43 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     read_csv(absolute_file_path)?;
 
-    // ok() is a method that creates a Result with the Ok variant. 
+    // ok() is a method that creates a Result with the Ok variant.
 
     Ok(())
-
 }
 
-// Discover Statement
-// Trans. Date,Description,Amount,Category
-
-// Chase Statement
-// Transaction Date,Post Date,Description,Category,Type,Amount,Memo
-
-
 fn read_csv(filename: &str) -> Result<(), io::Error> {
-
-    let file = File::open(filename)?; 
+    let file = File::open(filename)?;
 
     let mut counter = 0;
 
-    let mut reader = csv::Reader::from_reader(file); 
+    let mut reader = csv::Reader::from_reader(file);
 
     for result in reader.records() {
-
         counter += 1;
 
-        let record = result?; 
+        let record = result?;
 
         let trans_date = &record[0];
         let description = &record[1];
         let amount = &record[2];
         let category = &record[3];
 
-        println!("Record {}: {} {} {}", trans_date, description, amount, category);
+        println!(
+            "Record {}: {} {} {}",
+            trans_date, description, amount, category
+        );
 
         // Process each record (row) from the CSV file
         //println!("{:?}", record);
-
     }
 
-
     Ok(())
-
 }
 
-// We are going to have a couple graphs that we want to use to visual our data and then display it onto SLINT UI...
-
-// generating png images... gunna have to figure that one out
-
-
 fn draw_graph() -> Result<(), Box<dyn std::error::Error>> {
-    
-
-
     let root = BitMapBackend::new("plotters-doc-data/1.png", (640, 480)).into_drawing_area();
-    
+
     root.fill(&WHITE)?;
 
     let mut chart = ChartBuilder::on(&root)
@@ -116,10 +139,83 @@ fn draw_graph() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // discover statement
+// Trans. Date,Description,Amount,Category
+fn read_discover_csv(filename: &str) -> Result<(), io::Error> {
+    let file = File::open(filename)?;
 
+    let mut counter = 0;
+
+    let mut reader = csv::Reader::from_reader(file);
+
+    for result in reader.records() {
+        counter += 1;
+
+        let record = result?;
+
+        let trans_date = &record[0];
+        let description = &record[1];
+        let amount = &record[2];
+        let category = &record[3];
+
+        println!(
+            "Record {}: {} {} {}",
+            trans_date, description, amount, category
+        );
+
+        // Process each record (row) from the CSV file
+        //println!("{:?}", record);
+    }
+
+    Ok(())
+}
 
 // chase statement
+// Transaction Date,Post Date,Description,Category,Type,Amount,Memo
+fn read_chase_csv(filename: &str) -> Result<(), io::Error> {
+    let file = File::open(filename)?;
 
+    let mut reader = csv::Reader::from_reader(file);
 
-// sams club statement
+    for result in reader.records() {
+        let record = result?;
 
+        let trans_date = &record[0];
+        let post_date = &record[1];
+        let description = &record[2];
+        let category = &record[3];
+        let trans_type = &record[4];
+        let amount = &record[5];
+        let memo = &record[6];
+
+        println!(
+            "Record {}: {} {} {}",
+            trans_date, description, amount, category
+        );
+
+        println!("More Data: {}, {}, {}", post_date, trans_type, memo);
+
+        // Process each record (row) from the CSV file
+        //println!("{:?}", record);
+    }
+
+    Ok(())
+}
+
+fn new_read_csv_statement(filename: &str, source: StatementSource) -> Result<(), io::Error> {
+    let file = File::open(filename)?;
+
+    let mut reader = csv::Reader::from_reader(file);
+
+    // match source{
+
+    //     StatementSource: Discover => {
+
+    //     },
+    //     StatementSource:Chase => {
+
+    //     }
+
+    // }
+
+    Ok(())
+}
