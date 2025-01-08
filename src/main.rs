@@ -1,15 +1,14 @@
-use plotters::prelude::*;
-
 // makes the csv crate accessible to your program
 extern crate csv;
 
-use std::fs::File;
-
+use chrono::NaiveDate;
+use plotters::prelude::*;
 use serde::Deserialize;
-
 use std::error::Error;
+use std::fs::File;
 use std::io;
 use std::process;
+use rust_decimal::Decimal;
 
 #[derive(Debug)]
 enum StatementSource {
@@ -20,36 +19,61 @@ enum StatementSource {
 #[derive(Debug)]
 struct Transaction {
     date: NaiveDate,
+
     description: String,
+
     amount: Decimal,
+
     category: String,
+
     source: StatementSource,
+
     // Optional fields for additional Chase data
     post_date: Option<NaiveDate>,
+
     transaction_type: Option<String>,
+
     memo: Option<String>,
 }
 
+// Trans. Date,Description,Amount,Category
 #[derive(Debug, Deserialize)]
 struct DiscoverRecord {
     #[serde(rename = "Trans. Date")]
     trans_date: String,
-    Description: String,
-    Amount: String,
-    Category: String,
+
+    #[serde(rename = "Description")]
+    description: String,
+
+    #[serde(rename = "Amount")]
+    amount: String,
+
+    #[serde(rename = "Category")]
+    category: String,
 }
 
+// Transaction Date,Post Date,Description,Category,Type,Amount,Memo
 #[derive(Debug, Deserialize)]
 struct ChaseRecord {
     #[serde(rename = "Transaction Date")]
     trans_date: String,
+
     #[serde(rename = "Post Date")]
     post_date: String,
+
+    #[serde(rename = "Description")]
     description: String,
+
+    #[serde(rename = "Category")]
     category: String,
+
     #[serde(rename = "Type")]
     trans_type: String,
+
+    #[serde(rename = "Amount")]
     amount: String,
+
+    #[serde(rename = "Memo")]
     memo: String,
 }
 
@@ -204,18 +228,56 @@ fn read_chase_csv(filename: &str) -> Result<(), io::Error> {
 fn new_read_csv_statement(filename: &str, source: StatementSource) -> Result<(), io::Error> {
     let file = File::open(filename)?;
 
+    let mut transactions = Vec::new();
+
     let mut reader = csv::Reader::from_reader(file);
 
-    // match source{
+    match source {
+        StatementSource::Discover => {
+            let mut reader = csv::Reader::from_reader(file);
+            for result in reader.deserialize() {
+                let record: DiscoverRecord = result?;
 
-    //     StatementSource: Discover => {
+                // Parse and convert data into our unified Transaction structure
+                let transaction = Transaction {
+                    date: NaiveDate::parse_from_str(&record.trans_date, "%Y-%m-%d")
+                        .unwrap_or_default(),
+                    description: record.description,
+                    amount: record.amount.parse::<Decimal>().unwrap_or_default(),
+                    category: record.category,
+                    source: StatementSource::Discover,
+                    post_date: None,
+                    transaction_type: None,
+                    memo: None,
+                };
+                transactions.push(transaction);
+            }
+        }
 
-    //     },
-    //     StatementSource:Chase => {
+        StatementSource::Chase => {
+            let mut reader = csv::Reader::from_reader(file);
+            for result in reader.deserialize() {
+                let record: ChaseRecord = result?;
 
-    //     }
-
-    // }
+                // Parse and convert data into our unified Transaction structure
+                let transaction = Transaction {
+                    date: NaiveDate::parse_from_str(&record.trans_date, "%m/%d/%Y")
+                        .unwrap_or_default(),
+                    description: record.description,
+                    amount: record.amount.parse::<Decimal>().unwrap_or_default(),
+                    category: record.category,
+                    source: StatementSource::Chase,
+                    post_date: Some(
+                        NaiveDate::parse_from_str(&record.post_date, "%m/%d/%Y")
+                            .unwrap_or_default(),
+                    ),
+                    transaction_type: Some(record.trans_type),
+                    memo: Some(record.memo),
+                };
+                transactions.push(transaction);
+            }
+        }
+    }
 
     Ok(())
 }
