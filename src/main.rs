@@ -97,6 +97,9 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     // ok() is a method that creates a Result with the Ok variant.
 
+    
+
+
     Ok(())
 }
 
@@ -225,7 +228,8 @@ fn read_chase_csv(filename: &str) -> Result<(), io::Error> {
     Ok(())
 }
 
-fn new_read_csv_statement(filename: &str, source: StatementSource) -> Result<(), io::Error> {
+fn new_read_csv_statement(filename: &str, source: StatementSource) -> Result<Vec<Transaction>, csv::Error>{
+    
     let file = File::open(filename)?;
 
     let mut transactions = Vec::new();
@@ -233,51 +237,73 @@ fn new_read_csv_statement(filename: &str, source: StatementSource) -> Result<(),
     let mut reader = csv::Reader::from_reader(file);
 
     match source {
+        
         StatementSource::Discover => {
-            let mut reader = csv::Reader::from_reader(file);
+            
             for result in reader.deserialize() {
+                
                 let record: DiscoverRecord = result?;
 
                 // Parse and convert data into our unified Transaction structure
                 let transaction = Transaction {
+                    
                     date: NaiveDate::parse_from_str(&record.trans_date, "%Y-%m-%d")
                         .unwrap_or_default(),
+                    
                     description: record.description,
+                    
                     amount: record.amount.parse::<Decimal>().unwrap_or_default(),
+                    
                     category: record.category,
+                    
                     source: StatementSource::Discover,
+                    
                     post_date: None,
+                    
                     transaction_type: None,
+                    
                     memo: None,
+
                 };
                 transactions.push(transaction);
             }
         }
 
         StatementSource::Chase => {
-            let mut reader = csv::Reader::from_reader(file);
+            
             for result in reader.deserialize() {
+                
                 let record: ChaseRecord = result?;
 
                 // Parse and convert data into our unified Transaction structure
                 let transaction = Transaction {
+                    
                     date: NaiveDate::parse_from_str(&record.trans_date, "%m/%d/%Y")
                         .unwrap_or_default(),
+                    
                     description: record.description,
+                    
                     amount: record.amount.parse::<Decimal>().unwrap_or_default(),
+                    
                     category: record.category,
+                    
                     source: StatementSource::Chase,
+                    
                     post_date: Some(
                         NaiveDate::parse_from_str(&record.post_date, "%m/%d/%Y")
                             .unwrap_or_default(),
                     ),
+                    
                     transaction_type: Some(record.trans_type),
+                    
                     memo: Some(record.memo),
+
                 };
                 transactions.push(transaction);
             }
         }
+
     }
 
-    Ok(())
+    Ok(transactions)
 }
