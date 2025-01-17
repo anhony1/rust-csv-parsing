@@ -3,12 +3,12 @@ extern crate csv;
 
 use chrono::NaiveDate;
 use plotters::prelude::*;
+use rust_decimal::Decimal;
 use serde::Deserialize;
 use std::error::Error;
 use std::fs::File;
 use std::io;
 use std::process;
-use rust_decimal::Decimal;
 
 #[derive(Debug)]
 enum StatementSource {
@@ -87,48 +87,31 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
-    let absolute_file_path = "";
+    let discover_file_path = "./test-data/chase_test_data.csv";
+    let chase_file_path = "./test-data/disc_test_data.csv";
 
-    // The question mark is the error propagation operator in Rust. When placed after
-    // a Result, it either returns the value inside the Ok variant, or it returns the
-    // error from the Err variant. This is a convenient way to handle errors in Rust.
+    let mut disc_vec = Vec::new();
+    let mut chase_vec = Vec::new();
 
-    read_csv(absolute_file_path)?;
-
-    // ok() is a method that creates a Result with the Ok variant.
-
-    
-
-
-    Ok(())
-}
-
-fn read_csv(filename: &str) -> Result<(), io::Error> {
-    let file = File::open(filename)?;
-
-    let mut counter = 0;
-
-    let mut reader = csv::Reader::from_reader(file);
-
-    for result in reader.records() {
-        counter += 1;
-
-        let record = result?;
-
-        let trans_date = &record[0];
-        let description = &record[1];
-        let amount = &record[2];
-        let category = &record[3];
-
-        println!(
-            "Record {}: {} {} {}",
-            trans_date, description, amount, category
-        );
-
-        // Process each record (row) from the CSV file
-        //println!("{:?}", record);
+    if let Ok(res) = new_read_csv_statement(discover_file_path, StatementSource::Discover) {
+        disc_vec = res;
+    } else {
+        eprintln!(
+            "Discover CSV File could not be parsed: {}",
+            discover_file_path
+        )
     }
 
+    if let Ok(res2) = new_read_csv_statement(&chase_file_path, StatementSource::Chase) {
+        chase_vec = res2;
+    } else {
+        eprintln!("Chase CSV File could not be parsed: {}", chase_file_path)
+    }
+
+    println!("Discover Transactions: {:?}", disc_vec);
+    println!("Chase Transactions: {:?}", chase_vec);
+
+    // ok() is a method that creates a Result with the Ok variant.
     Ok(())
 }
 
@@ -165,145 +148,89 @@ fn draw_graph() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// discover statement
-// Trans. Date,Description,Amount,Category
-fn read_discover_csv(filename: &str) -> Result<(), io::Error> {
-    let file = File::open(filename)?;
-
-    let mut counter = 0;
-
-    let mut reader = csv::Reader::from_reader(file);
-
-    for result in reader.records() {
-        counter += 1;
-
-        let record = result?;
-
-        let trans_date = &record[0];
-        let description = &record[1];
-        let amount = &record[2];
-        let category = &record[3];
-
-        println!(
-            "Record {}: {} {} {}",
-            trans_date, description, amount, category
-        );
-
-        // Process each record (row) from the CSV file
-        //println!("{:?}", record);
-    }
-
-    Ok(())
-}
-
-// chase statement
-// Transaction Date,Post Date,Description,Category,Type,Amount,Memo
-fn read_chase_csv(filename: &str) -> Result<(), io::Error> {
-    let file = File::open(filename)?;
-
-    let mut reader = csv::Reader::from_reader(file);
-
-    for result in reader.records() {
-        let record = result?;
-
-        let trans_date = &record[0];
-        let post_date = &record[1];
-        let description = &record[2];
-        let category = &record[3];
-        let trans_type = &record[4];
-        let amount = &record[5];
-        let memo = &record[6];
-
-        println!(
-            "Record {}: {} {} {}",
-            trans_date, description, amount, category
-        );
-
-        println!("More Data: {}, {}, {}", post_date, trans_type, memo);
-
-        // Process each record (row) from the CSV file
-        //println!("{:?}", record);
-    }
-
-    Ok(())
-}
-
-fn new_read_csv_statement(filename: &str, source: StatementSource) -> Result<Vec<Transaction>, csv::Error>{
-    
-    let file = File::open(filename)?;
-
-    let mut transactions = Vec::new();
-
-    let mut reader = csv::Reader::from_reader(file);
+fn new_read_csv_statement(
+    filename: &str,
+    source: StatementSource,
+) -> Result<Vec<Transaction>, csv::Error> {
+    let file: File = File::open(filename)?;
+    let mut transactions: Vec<Transaction> = Vec::new();
+    let mut reader: csv::Reader<File> = csv::Reader::from_reader(file);
 
     match source {
-        
         StatementSource::Discover => {
-            
             for result in reader.deserialize() {
-                
-                let record: DiscoverRecord = result?;
+                match result {
+                    Ok(record) => {
+                        let record: DiscoverRecord = record;
 
-                // Parse and convert data into our unified Transaction structure
-                let transaction = Transaction {
-                    
-                    date: NaiveDate::parse_from_str(&record.trans_date, "%Y-%m-%d")
-                        .unwrap_or_default(),
-                    
-                    description: record.description,
-                    
-                    amount: record.amount.parse::<Decimal>().unwrap_or_default(),
-                    
-                    category: record.category,
-                    
-                    source: StatementSource::Discover,
-                    
-                    post_date: None,
-                    
-                    transaction_type: None,
-                    
-                    memo: None,
+                        println!("Parsed Record: {:?}", record);
 
-                };
-                transactions.push(transaction);
+                        let transaction = Transaction {
+                            date: NaiveDate::parse_from_str(&record.trans_date, "%Y-%m-%d")
+                                .unwrap_or_default(),
+                            description: record.description,
+                            amount: record.amount.parse::<Decimal>().unwrap_or_default(),
+                            category: record.category,
+                            source: StatementSource::Discover,
+                            post_date: None,
+                            transaction_type: None,
+                            memo: None,
+                        };
+
+                        transactions.push(transaction);
+                    }
+
+                    Err(err) => {
+                        eprintln!("Error parsing Discover CSV: {}", err);
+                    }
+                }
             }
         }
 
         StatementSource::Chase => {
-            
             for result in reader.deserialize() {
-                
-                let record: ChaseRecord = result?;
+                match result {
+                    Ok(record) => {
+                        let record: ChaseRecord = record;
 
-                // Parse and convert data into our unified Transaction structure
-                let transaction = Transaction {
-                    
-                    date: NaiveDate::parse_from_str(&record.trans_date, "%m/%d/%Y")
-                        .unwrap_or_default(),
-                    
-                    description: record.description,
-                    
-                    amount: record.amount.parse::<Decimal>().unwrap_or_default(),
-                    
-                    category: record.category,
-                    
-                    source: StatementSource::Chase,
-                    
-                    post_date: Some(
-                        NaiveDate::parse_from_str(&record.post_date, "%m/%d/%Y")
-                            .unwrap_or_default(),
-                    ),
-                    
-                    transaction_type: Some(record.trans_type),
-                    
-                    memo: Some(record.memo),
+                        println!("Parsed Record: {:?}", record);
 
-                };
-                transactions.push(transaction);
+                        let transaction = Transaction {
+                            date: NaiveDate::parse_from_str(&record.trans_date, "%m/%d/%Y")
+                                .unwrap_or_default(),
+
+                            description: record.description,
+
+                            amount: record.amount.parse::<Decimal>().unwrap_or_default(),
+
+                            category: record.category,
+
+                            source: StatementSource::Chase,
+
+                            post_date: Some(
+                                NaiveDate::parse_from_str(&record.post_date, "%m/%d/%Y")
+                                    .unwrap_or_default(),
+                            ),
+
+                            transaction_type: Some(record.trans_type),
+
+                            memo: Some(record.memo),
+                        };
+                        transactions.push(transaction);
+                    }
+
+                    Err(err) => {
+                        eprintln!("Error parsing Chase CSV: {}", err);
+                    }
+                }
             }
         }
-
     }
 
+    println!(
+        "Parsed {} transactions from {}",
+        transactions.len(),
+        filename
+    );
     Ok(transactions)
 }
