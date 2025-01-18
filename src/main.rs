@@ -36,6 +36,12 @@ struct Transaction {
     memo: Option<String>,
 }
 
+impl std::fmt::Display for Transaction{
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Transaction: {} - ${}", self.description, self.amount)
+    }
+}
+
 // Trans. Date,Description,Amount,Category
 #[derive(Debug, Deserialize)]
 struct DiscoverRecord {
@@ -87,8 +93,8 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
-    let discover_file_path = "./test-data/chase_test_data.csv";
-    let chase_file_path = "./test-data/disc_test_data.csv";
+    let discover_file_path = "./test-data/disc_test_data.CSV";
+    let chase_file_path = "./test-data/chase_test_data.csv";
 
     let mut disc_vec = Vec::new();
     let mut chase_vec = Vec::new();
@@ -108,8 +114,35 @@ fn run() -> Result<(), Box<dyn Error>> {
         eprintln!("Chase CSV File could not be parsed: {}", chase_file_path)
     }
 
-    println!("Discover Transactions: {:?}", disc_vec);
-    println!("Chase Transactions: {:?}", chase_vec);
+    // println!("Discover Transactions: {:?}", disc_vec);
+    // println!("Chase Transactions: {:?}", chase_vec);
+
+    let mut total_amount: Decimal = Decimal::new(0, 0);
+
+    let mut max: Decimal = Decimal::new(0, 0);
+    let mut max_transaction: Transaction;
+
+
+
+    for transaction in disc_vec {
+        // println!("Discover Transaction: {:?}", transaction);
+        println!("Amount: {}", transaction.amount);
+
+        total_amount += transaction.amount;
+
+        if transaction.amount > max {
+            max = transaction.amount;
+            max_transaction = transaction;
+        } else {
+            
+        }
+
+
+    }
+
+    println!("Total Amount: ${}", total_amount);
+    println!("Max Amount: ${}", max);
+    println!("Max Transaction: {}", max_transaction);
 
     // ok() is a method that creates a Result with the Ok variant.
     Ok(())
@@ -152,6 +185,7 @@ fn new_read_csv_statement(
     filename: &str,
     source: StatementSource,
 ) -> Result<Vec<Transaction>, csv::Error> {
+    
     let file: File = File::open(filename)?;
     let mut transactions: Vec<Transaction> = Vec::new();
     let mut reader: csv::Reader<File> = csv::Reader::from_reader(file);
