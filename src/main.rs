@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io;
 use std::process;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum StatementSource {
     Discover,
     Chase,
@@ -59,7 +59,7 @@ struct DiscoverRecord {
 }
 
 // Transaction Date,Post Date,Description,Category,Type,Amount,Memo
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 struct ChaseRecord {
     #[serde(rename = "Transaction Date")]
     trans_date: String,
@@ -111,42 +111,58 @@ fn run() -> Result<(), Box<dyn Error>> {
     if let Ok(res2) = new_read_csv_statement(&chase_file_path, StatementSource::Chase) {
         chase_vec = res2;
     } else {
-        eprintln!("Chase CSV File could not be parsed: {}", chase_file_path)
+        eprintln!(
+            "Chase CSV File could not be parsed: {}", 
+            chase_file_path
+        )
     }
 
-    // println!("Discover Transactions: {:?}", disc_vec);
-    // println!("Chase Transactions: {:?}", chase_vec);
+    println!("Discover Total Amount: ${}", calculate_total_amount(&disc_vec));
+    println!("Chase Total Amount: ${}", calculate_total_amount(&chase_vec));
+    
+    let pair = calculate_max_amount(&disc_vec);
+    let pair2 = calculate_max_amount(&chase_vec);
 
+    println!("Discover Max Amount: ${}, for transaction: {}", pair.0, pair.1);
+    println!("Chase Max Amount: ${}, for transaction: {}", pair2.0, pair2.1);
+
+    Ok(())
+}
+
+fn calculate_total_amount(transactions: &Vec<Transaction>) -> Decimal {
     let mut total_amount: Decimal = Decimal::new(0, 0);
 
-    let mut max: Decimal = Decimal::new(0, 0);
-    let mut max_transaction: Transaction;
-
-
-
-    for transaction in disc_vec {
-        // println!("Discover Transaction: {:?}", transaction);
-        println!("Amount: {}", transaction.amount);
-
+    for transaction in transactions {
         total_amount += transaction.amount;
+        
+        if StatementSource::Chase == transaction.source {
 
+            println!("{}", transaction.amount);
+
+        }
+
+        
+    }
+
+    total_amount
+}
+
+fn calculate_max_amount(transactions: &Vec<Transaction>) -> (Decimal, &Transaction) {
+    let mut max: Decimal = Decimal::new(0, 0);
+    
+    let mut max_transaction: &Transaction = &transactions[0];
+
+    for transaction in transactions {
         if transaction.amount > max {
             max = transaction.amount;
             max_transaction = transaction;
-        } else {
-            
         }
-
-
     }
 
-    println!("Total Amount: ${}", total_amount);
-    println!("Max Amount: ${}", max);
-    println!("Max Transaction: {}", max_transaction);
-
-    // ok() is a method that creates a Result with the Ok variant.
-    Ok(())
+    (max, max_transaction)
 }
+
+
 
 fn draw_graph() -> Result<(), Box<dyn std::error::Error>> {
     let root = BitMapBackend::new("plotters-doc-data/1.png", (640, 480)).into_drawing_area();
@@ -197,8 +213,6 @@ fn new_read_csv_statement(
                     Ok(record) => {
                         let record: DiscoverRecord = record;
 
-                        println!("Parsed Record: {:?}", record);
-
                         let transaction = Transaction {
                             date: NaiveDate::parse_from_str(&record.trans_date, "%Y-%m-%d")
                                 .unwrap_or_default(),
@@ -227,7 +241,6 @@ fn new_read_csv_statement(
                     Ok(record) => {
                         let record: ChaseRecord = record;
 
-                        println!("Parsed Record: {:?}", record);
 
                         let transaction = Transaction {
                             date: NaiveDate::parse_from_str(&record.trans_date, "%m/%d/%Y")
