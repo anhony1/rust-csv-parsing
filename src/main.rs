@@ -1,14 +1,15 @@
 // makes the csv crate accessible to your program
 extern crate csv;
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, Datelike};
 use plotters::prelude::*;
 use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 use serde::Deserialize;
 use std::error::Error;
 use std::fs::File;
-use std::io;
 use std::process;
+use std::collections::HashMap;
 
 #[derive(Debug, PartialEq)]
 enum StatementSource {
@@ -18,25 +19,26 @@ enum StatementSource {
 
 #[derive(Debug)]
 struct Transaction {
-    date: NaiveDate,
-
-    description: String,
-
     amount: Decimal,
 
     category: String,
 
-    source: StatementSource,
+    date: NaiveDate,
+
+    description: String,
+
+    memo: Option<String>,
 
     // Optional fields for additional Chase data
     post_date: Option<NaiveDate>,
 
-    transaction_type: Option<String>,
+    source: StatementSource,
 
-    memo: Option<String>,
+    transaction_type: Option<String>,
 }
 
-impl std::fmt::Display for Transaction{
+
+impl std::fmt::Display for Transaction {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "Transaction: {} - ${}", self.description, self.amount)
     }
@@ -84,15 +86,18 @@ struct ChaseRecord {
 }
 
 fn main() {
+    
     draw_graph().unwrap();
 
-    if let Err(err) = run() {
+    if let Err(err) = process_csv_sheets() {
         println!("{}", err);
         process::exit(1);
     }
+
+
 }
 
-fn run() -> Result<(), Box<dyn Error>> {
+fn process_csv_sheets() -> Result<(), Box<dyn Error>> {
     let discover_file_path = "./test-data/disc_test_data.CSV";
     let chase_file_path = "./test-data/chase_test_data.csv";
 
@@ -111,20 +116,56 @@ fn run() -> Result<(), Box<dyn Error>> {
     if let Ok(res2) = new_read_csv_statement(&chase_file_path, StatementSource::Chase) {
         chase_vec = res2;
     } else {
-        eprintln!(
-            "Chase CSV File could not be parsed: {}", 
-            chase_file_path
-        )
+        eprintln!("Chase CSV File could not be parsed: {}", chase_file_path)
     }
 
-    println!("Discover Total Amount: ${}", calculate_total_amount(&disc_vec));
-    println!("Chase Total Amount: ${}", calculate_total_amount(&chase_vec));
-    
+    println!(
+        "Discover Total Amount: ${}",
+        calculate_total_amount(&disc_vec)
+    );
+    println!(
+        "Chase Total Amount: ${}",
+        calculate_total_amount(&chase_vec)
+    );
+
     let pair = calculate_max_amount(&disc_vec);
     let pair2 = calculate_max_amount(&chase_vec);
 
-    println!("Discover Max Amount: ${}, for transaction: {}", pair.0, pair.1);
-    println!("Chase Max Amount: ${}, for transaction: {}", pair2.0, pair2.1);
+    println!(
+        "Discover Max Amount: ${}, for transaction: {}",
+        pair.0, pair.1
+    );
+    println!(
+        "Chase Max Amount: ${}, for transaction: {}",
+        pair2.0, pair2.1
+    );
+
+
+    let disc_hm: HashMap<i32, i32> = calculate_monthly_spending(&disc_vec);
+    let chase_hm: HashMap<i32, i32> = calculate_monthly_spending(&chase_vec);
+
+    println!("\n");
+
+    // for (key, value) in disc_hm {
+    //     println!("Discover | Month: {} | Amount: {}", key, value);
+    // }
+
+    // for (key, value) in chase_hm {
+    //     println!("Chase | Month: {} | Amount: {}", key, value);
+    // }
+
+    for i in 1..13 {
+
+        let disc_val = disc_hm.get(&i).copied().unwrap_or(0);
+        let chase_val = chase_hm.get(&i).copied().unwrap_or(0);
+
+        println!("Month: {} | Amount ${}", i, disc_val);
+        println!("Month: {} | Amount ${}", i, chase_val);
+
+        println!("\n");
+        
+    }
+
 
     Ok(())
 }
@@ -134,14 +175,6 @@ fn calculate_total_amount(transactions: &Vec<Transaction>) -> Decimal {
 
     for transaction in transactions {
         total_amount += transaction.amount;
-        
-        if StatementSource::Chase == transaction.source {
-
-            println!("{}", transaction.amount);
-
-        }
-
-        
     }
 
     total_amount
@@ -149,7 +182,7 @@ fn calculate_total_amount(transactions: &Vec<Transaction>) -> Decimal {
 
 fn calculate_max_amount(transactions: &Vec<Transaction>) -> (Decimal, &Transaction) {
     let mut max: Decimal = Decimal::new(0, 0);
-    
+
     let mut max_transaction: &Transaction = &transactions[0];
 
     for transaction in transactions {
@@ -161,6 +194,43 @@ fn calculate_max_amount(transactions: &Vec<Transaction>) -> (Decimal, &Transacti
 
     (max, max_transaction)
 }
+
+// TODO: We are calculating the total of the month for all of the years instead of just doing each year monthly spending
+// Take into account the year instead
+
+fn calculate_monthly_spending(transactions: &Vec<Transaction>) -> HashMap<i32, i32> {
+    let mut monthly_spending: HashMap<i32, i32> = HashMap::new();
+
+    for transaction in transactions {
+        
+        
+        let month = transaction.date.month() as i32;
+
+        // Get the current total for the month, defaulting to 0 if not present
+        let current_total = monthly_spending.get(&month).copied().unwrap_or(0);
+
+        // Calculate the new total by adding the transaction amount
+        let new_total = add_option_and_decimal(Some(&current_total), transaction.amount);
+
+        // Insert the updated total back into the HashMap
+        monthly_spending.insert(month, new_total);
+    }
+
+    monthly_spending
+}
+
+fn add_option_and_decimal(opt: Option<&i32>, dec: Decimal) -> i32 {
+    // Handle the Option to get the i32 value or default to 0
+    let opt_value = opt.unwrap_or(&0);
+
+    // Convert the Decimal to i32, handling possible conversion issues
+    // Here we assume truncating the Decimal to an i32 is acceptable
+    let dec_value = dec.to_i32().unwrap_or(0);
+
+    // Perform the addition
+    opt_value + dec_value
+}
+
 
 
 
@@ -201,7 +271,6 @@ fn new_read_csv_statement(
     filename: &str,
     source: StatementSource,
 ) -> Result<Vec<Transaction>, csv::Error> {
-    
     let file: File = File::open(filename)?;
     let mut transactions: Vec<Transaction> = Vec::new();
     let mut reader: csv::Reader<File> = csv::Reader::from_reader(file);
@@ -214,7 +283,8 @@ fn new_read_csv_statement(
                         let record: DiscoverRecord = record;
 
                         let transaction = Transaction {
-                            date: NaiveDate::parse_from_str(&record.trans_date, "%Y-%m-%d")
+                            
+                            date: NaiveDate::parse_from_str(&record.trans_date, "%m/%d/%Y")
                                 .unwrap_or_default(),
                             description: record.description,
                             amount: record.amount.parse::<Decimal>().unwrap_or_default(),
@@ -224,7 +294,7 @@ fn new_read_csv_statement(
                             transaction_type: None,
                             memo: None,
                         };
-
+                        
                         transactions.push(transaction);
                     }
 
@@ -241,6 +311,7 @@ fn new_read_csv_statement(
                     Ok(record) => {
                         let record: ChaseRecord = record;
 
+                        let replaced_amount = record.amount.replace("-", "");
 
                         let transaction = Transaction {
                             date: NaiveDate::parse_from_str(&record.trans_date, "%m/%d/%Y")
@@ -248,7 +319,7 @@ fn new_read_csv_statement(
 
                             description: record.description,
 
-                            amount: record.amount.parse::<Decimal>().unwrap_or_default(),
+                            amount: replaced_amount.parse::<Decimal>().unwrap_or_default(),
 
                             category: record.category,
 
@@ -263,6 +334,7 @@ fn new_read_csv_statement(
 
                             memo: Some(record.memo),
                         };
+
                         transactions.push(transaction);
                     }
 
