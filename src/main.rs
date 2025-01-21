@@ -141,8 +141,8 @@ fn process_csv_sheets() -> Result<(), Box<dyn Error>> {
     );
 
 
-    let disc_hm: HashMap<i32, i32> = calculate_monthly_spending(&disc_vec);
-    let chase_hm: HashMap<i32, i32> = calculate_monthly_spending(&chase_vec);
+    let disc_hm: HashMap<(i32,i32), i32> = calculate_monthly_spending(&disc_vec);
+    let chase_hm: HashMap<(i32,i32), i32> = calculate_monthly_spending(&chase_vec);
 
     println!("\n");
 
@@ -154,16 +154,23 @@ fn process_csv_sheets() -> Result<(), Box<dyn Error>> {
     //     println!("Chase | Month: {} | Amount: {}", key, value);
     // }
 
-    for i in 1..13 {
+    let years: [i32; 3] = [2022, 2023, 2024];
 
-        let disc_val = disc_hm.get(&i).copied().unwrap_or(0);
-        let chase_val = chase_hm.get(&i).copied().unwrap_or(0);
+    for i in years {
 
-        println!("Month: {} | Amount ${}", i, disc_val);
-        println!("Month: {} | Amount ${}", i, chase_val);
+        for j in 1..13 {
+            
+            let disc_val = disc_hm.get(&(i,j)).copied().unwrap_or(0);
+            let chase_val = chase_hm.get(&(i,j)).copied().unwrap_or(0);
 
-        println!("\n");
-        
+            if disc_val != 0 && chase_val != 0{
+                println!("Discover: Year {} Month: {} | Amount ${}", i, j, disc_val);
+                println!("Chase: Year {} Month: {} | Amount ${}", i, j, chase_val);
+
+                println!("\n");
+            }
+
+        }
     }
 
 
@@ -198,22 +205,30 @@ fn calculate_max_amount(transactions: &Vec<Transaction>) -> (Decimal, &Transacti
 // TODO: We are calculating the total of the month for all of the years instead of just doing each year monthly spending
 // Take into account the year instead
 
-fn calculate_monthly_spending(transactions: &Vec<Transaction>) -> HashMap<i32, i32> {
-    let mut monthly_spending: HashMap<i32, i32> = HashMap::new();
+// TODO: Add timer
+
+// TODO: Make program multithreaded
+
+fn calculate_monthly_spending(transactions: &Vec<Transaction>) -> HashMap<(i32, i32), i32> {
+     
+    let mut monthly_spending: HashMap<(i32, i32), i32> = HashMap::new();
 
     for transaction in transactions {
         
-        
         let month = transaction.date.month() as i32;
+        let year = transaction.date.year() as i32;
+
+        let new_key = (year, month);
 
         // Get the current total for the month, defaulting to 0 if not present
-        let current_total = monthly_spending.get(&month).copied().unwrap_or(0);
+        let current_total = monthly_spending.get(&new_key).copied().unwrap_or(0);
 
         // Calculate the new total by adding the transaction amount
         let new_total = add_option_and_decimal(Some(&current_total), transaction.amount);
 
         // Insert the updated total back into the HashMap
-        monthly_spending.insert(month, new_total);
+        monthly_spending.insert(new_key, new_total);
+
     }
 
     monthly_spending
@@ -230,8 +245,6 @@ fn add_option_and_decimal(opt: Option<&i32>, dec: Decimal) -> i32 {
     // Perform the addition
     opt_value + dec_value
 }
-
-
 
 
 fn draw_graph() -> Result<(), Box<dyn std::error::Error>> {
