@@ -1,15 +1,17 @@
 // makes the csv crate accessible to your program
 extern crate csv;
 
-use chrono::{NaiveDate, Datelike};
+use chrono::{Datelike, NaiveDate};
 use plotters::prelude::*;
-use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::process;
-use std::collections::HashMap;
+use std::thread;
+use std::time::{Duration, Instant, SystemTime};
 
 #[derive(Debug, PartialEq)]
 enum StatementSource {
@@ -36,7 +38,6 @@ struct Transaction {
 
     transaction_type: Option<String>,
 }
-
 
 impl std::fmt::Display for Transaction {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -86,15 +87,12 @@ struct ChaseRecord {
 }
 
 fn main() {
-    
     draw_graph().unwrap();
 
     if let Err(err) = process_csv_sheets() {
         println!("{}", err);
         process::exit(1);
     }
-
-
 }
 
 fn process_csv_sheets() -> Result<(), Box<dyn Error>> {
@@ -103,6 +101,23 @@ fn process_csv_sheets() -> Result<(), Box<dyn Error>> {
 
     let mut disc_vec = Vec::new();
     let mut chase_vec = Vec::new();
+
+    // TEST BEGIN =====>
+
+    let now = Instant::now();
+
+    thread::spawn(|| new_read_csv_statement(discover_file_path, StatementSource::Discover));
+
+    thread::spawn(|| new_read_csv_statement(chase_file_path, StatementSource::Chase));
+
+
+    let elapsed = now.elapsed();
+
+    println!("Elapsed: {:.2?}", elapsed);
+
+    // TEST END =====>
+
+    let now = Instant::now();
 
     if let Ok(res) = new_read_csv_statement(discover_file_path, StatementSource::Discover) {
         disc_vec = res;
@@ -113,11 +128,21 @@ fn process_csv_sheets() -> Result<(), Box<dyn Error>> {
         )
     }
 
-    if let Ok(res2) = new_read_csv_statement(&chase_file_path, StatementSource::Chase) {
+    if let Ok(res2) = new_read_csv_statement(chase_file_path, StatementSource::Chase) {
         chase_vec = res2;
     } else {
-        eprintln!("Chase CSV File could not be parsed: {}", chase_file_path)
+        eprintln!(
+            "Chase CSV File could not be parsed: {}", 
+            chase_file_path
+        )
     }
+
+    let elapsed = now.elapsed();
+
+    println!("Elapsed: {:.2?}", elapsed);
+
+    // TEST END =====>
+
 
     println!(
         "Discover Total Amount: ${}",
@@ -140,26 +165,25 @@ fn process_csv_sheets() -> Result<(), Box<dyn Error>> {
         pair2.0, pair2.1
     );
 
-
-    let disc_hm: HashMap<(i32,i32), i32> = calculate_monthly_spending(&disc_vec);
-    let chase_hm: HashMap<(i32,i32), i32> = calculate_monthly_spending(&chase_vec);
+    let disc_hm: HashMap<(i32, i32), i32> = calculate_monthly_spending(&disc_vec);
+    let chase_hm: HashMap<(i32, i32), i32> = calculate_monthly_spending(&chase_vec);
 
     println!("\n");
 
-    // for (key, value) in disc_hm {
-    //     println!("Discover | Month: {} | Amount: {}", key, value);
-    // }
+    for (key, value) in disc_hm {
+        println!("Discover | Month: {} | Amount: {}", key, value);
+    }
 
-    // for (key, value) in chase_hm {
-    //     println!("Chase | Month: {} | Amount: {}", key, value);
-    // }
+    for (key, value) in chase_hm {
+        println!("Chase | Month: {} | Amount: {}", key, value);
+    }
 
     let years: [i32; 3] = [2022, 2023, 2024];
 
     for i in years {
 
         for j in 1..13 {
-            
+
             let disc_val = disc_hm.get(&(i,j)).copied().unwrap_or(0);
             let chase_val = chase_hm.get(&(i,j)).copied().unwrap_or(0);
 
@@ -172,7 +196,6 @@ fn process_csv_sheets() -> Result<(), Box<dyn Error>> {
 
         }
     }
-
 
     Ok(())
 }
@@ -205,16 +228,11 @@ fn calculate_max_amount(transactions: &Vec<Transaction>) -> (Decimal, &Transacti
 // TODO: We are calculating the total of the month for all of the years instead of just doing each year monthly spending
 // Take into account the year instead
 
-// TODO: Add timer
-
-// TODO: Make program multithreaded
 
 fn calculate_monthly_spending(transactions: &Vec<Transaction>) -> HashMap<(i32, i32), i32> {
-     
     let mut monthly_spending: HashMap<(i32, i32), i32> = HashMap::new();
 
     for transaction in transactions {
-        
         let month = transaction.date.month() as i32;
         let year = transaction.date.year() as i32;
 
@@ -228,7 +246,6 @@ fn calculate_monthly_spending(transactions: &Vec<Transaction>) -> HashMap<(i32, 
 
         // Insert the updated total back into the HashMap
         monthly_spending.insert(new_key, new_total);
-
     }
 
     monthly_spending
@@ -245,7 +262,6 @@ fn add_option_and_decimal(opt: Option<&i32>, dec: Decimal) -> i32 {
     // Perform the addition
     opt_value + dec_value
 }
-
 
 fn draw_graph() -> Result<(), Box<dyn std::error::Error>> {
     let root = BitMapBackend::new("plotters-doc-data/1.png", (640, 480)).into_drawing_area();
@@ -296,7 +312,6 @@ fn new_read_csv_statement(
                         let record: DiscoverRecord = record;
 
                         let transaction = Transaction {
-                            
                             date: NaiveDate::parse_from_str(&record.trans_date, "%m/%d/%Y")
                                 .unwrap_or_default(),
                             description: record.description,
@@ -307,7 +322,7 @@ fn new_read_csv_statement(
                             transaction_type: None,
                             memo: None,
                         };
-                        
+
                         transactions.push(transaction);
                     }
 
