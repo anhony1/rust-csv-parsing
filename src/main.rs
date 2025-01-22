@@ -143,6 +143,33 @@ fn process_csv_sheets() -> Result<(), Box<dyn Error>> {
 
     // TEST END =====>
 
+    // CLOSURE TEST START =====>
+
+    let print_text = || println!("Defining Closure");
+
+    print_text();
+
+    let add_one = |x:i32| x + 1;
+
+    let result = add_one(2);
+
+    let squared_sum = |x: i32, y: i32| {
+
+        let sum: i32 = x + y;
+
+        let result: i32 = sum * sum;
+
+        return result;
+
+    };
+
+    let result2 = squared_sum(5,3);
+
+    println!("Result = {}", result);
+
+    println!("Result 2 = {}", result2);
+
+    // CLOSURE TEST END =====>
 
     println!(
         "Discover Total Amount: ${}",
@@ -170,13 +197,13 @@ fn process_csv_sheets() -> Result<(), Box<dyn Error>> {
 
     println!("\n");
 
-    for (key, value) in disc_hm {
-        println!("Discover | Month: {} | Amount: {}", key, value);
-    }
+    // for (key, value) in disc_hm {
+    //     println!("Discover | Month: {} | Amount: {}", key, value);
+    // }
 
-    for (key, value) in chase_hm {
-        println!("Chase | Month: {} | Amount: {}", key, value);
-    }
+    // for (key, value) in chase_hm {
+    //     println!("Chase | Month: {} | Amount: {}", key, value);
+    // }
 
     let years: [i32; 3] = [2022, 2023, 2024];
 
@@ -228,6 +255,8 @@ fn calculate_max_amount(transactions: &Vec<Transaction>) -> (Decimal, &Transacti
 // TODO: We are calculating the total of the month for all of the years instead of just doing each year monthly spending
 // Take into account the year instead
 
+// TODO: I have too many processes running on my CPU to be able to see a noticable impact on performance. I can't tell
+// really which core is being used either. Let's try to run this on a VM in another life
 
 fn calculate_monthly_spending(transactions: &Vec<Transaction>) -> HashMap<(i32, i32), i32> {
     let mut monthly_spending: HashMap<(i32, i32), i32> = HashMap::new();
